@@ -1,3 +1,17 @@
+# RFP 생성을 위한 Few-Shot Learning 기반 동적 예시 선택 시스템
+# 
+# 이 스크립트는 다음과 같은 기능을 수행합니다:
+# 1. Chroma 벡터 스토리지에서 유사한 RFP 예시를 검색
+# 2. 검색된 예시들 중에서 관련도가 높은 예시들을 수동으로 재순위화
+# 3. 선택된 예시들을 기반으로 Few-Shot Prompt를 생성하여 GPT-4를 통해 새로운 RFP 생성
+# 4. 생성된 RFP를 마크다운 파일로 저장
+#
+# 주요 의존성:
+# - LangChain
+# - Chroma
+# - HuggingFace Embeddings
+# - OpenAI GPT-4
+
 from langchain_chroma import Chroma
 from langchain_huggingface import HuggingFaceEmbeddings
 from langchain_openai import ChatOpenAI
@@ -5,6 +19,7 @@ from langchain_core.prompts import FewShotPromptTemplate, PromptTemplate
 
 import pandas as pd
 import os, re
+
 
 
 # 1. 임베딩 모델 로드 (저장 시 사용한 것과 동일해야 함)

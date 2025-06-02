@@ -1,3 +1,15 @@
+# RFP 샘플 데이터 생성 및 전처리 스크립트
+#
+# 이 스크립트는 다음과 같은 기능을 수행합니다:
+# 1. TSV 파일에서 RFP 관련 데이터를 불러오기
+# 2. 데이터 전처리 및 정제
+# 3. JSON 형식으로 데이터 통합
+# 4. 마크다운 형식으로 최종 RFP 문서 생성
+#
+# 주요 의존성:
+# - pandas
+# - tqdm
+
 import pandas as pd
 import os
 from tqdm import tqdm
