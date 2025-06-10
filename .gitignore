@@ -6,6 +6,7 @@ __pycache__/
 # Data files
 data(sample)/
 fewshot/
+문서/
 
 # C extensions
 *.so
