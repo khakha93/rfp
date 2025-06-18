@@ -1,6 +1,7 @@
+from tools import pretty_print_docs
+
 from langchain_chroma import Chroma
 from langchain_huggingface import HuggingFaceEmbeddings
-from langchain_core.documents import Document
 from langchain_core.retrievers import BaseRetriever
 
 from langchain.retrievers import ContextualCompressionRetriever
@@ -19,13 +20,6 @@ from langchain.retrievers.document_compressors import CrossEncoderReranker
 from langchain_community.cross_encoders import HuggingFaceCrossEncoder
 
 
-# 문서 출력 도우미 함수
-def pretty_print_docs(docs: list[Document]):
-    print(
-        f"\n{'-' * 100}\n".join(
-            [f"Document {i+1}:\n\n" + d.page_content for i, d in enumerate(docs)]
-        )
-    )
 
 def get_retriever(top_k: int = 30) -> BaseRetriever:
     logging.info("Loading embedding model...")
