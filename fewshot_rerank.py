@@ -1,12 +1,14 @@
 from tools import pretty_print_docs
 
 from langchain_chroma import Chroma
+from langchain_core.documents import Document
 from langchain_huggingface import HuggingFaceEmbeddings
 from langchain_core.retrievers import BaseRetriever
+from langchain_teddynote.retrievers import KiwiBM25Retriever
+
 
 from langchain.retrievers import ContextualCompressionRetriever
 from langchain.retrievers.document_compressors import FlashrankRerank
-from langchain_openai import ChatOpenAI
 
 import logging
 
@@ -18,7 +20,10 @@ logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(
 from langchain.retrievers import ContextualCompressionRetriever
 from langchain.retrievers.document_compressors import CrossEncoderReranker
 from langchain_community.cross_encoders import HuggingFaceCrossEncoder
-
+from langchain_teddynote.retrievers import (
+    EnsembleRetriever,
+    EnsembleMethod,
+)
 
 
 def get_retriever(top_k: int = 30) -> BaseRetriever:
@@ -34,14 +39,22 @@ def get_retriever(top_k: int = 30) -> BaseRetriever:
     logging.info("Loading Chroma vectorstore...")
 
     # 2. Chroma 로드 (저장했던 경로와 동일해야 함)
-    persist_directory = "./chroma_db"
+    persist_directory = "C:\\kha\\project\\rfpTest\\chroma_db"
     vectorstore = Chroma(
     persist_directory=persist_directory,
     embedding_function=embedding_model)
     logging.info("Chroma vectorstore loaded successfully")
 
-    retriever = vectorstore.as_retriever(search_kwargs={"k": top_k})
-    return retriever
+    vs_retriever = vectorstore.as_retriever(search_kwargs={"k": top_k})
+
+    vs = vectorstore.get()
+    docs = [Document(page_content=doc, metadata=meta) for doc, meta in zip(vs['documents'], vs['metadatas'])]
+    bm25_retriever = KiwiBM25Retriever.from_documents(docs)
+    bm25_retriever.k = top_k
+
+    cc_ensemble_retriever = EnsembleRetriever(
+    retrievers=[vs_retriever, bm25_retriever], weights=[0.7, 0.3], method=EnsembleMethod.CC)
+    return cc_ensemble_retriever
 
 # Rerank (Cross Encoder Reranker)
 def cross_encoders_reranker(retriever: BaseRetriever, top_k: int =10):
@@ -58,13 +71,11 @@ def cross_encoders_reranker(retriever: BaseRetriever, top_k: int =10):
         base_compressor=compressor, base_retriever=retriever
     )
 
-    # 압축된 문서 검색
-    compressed_docs = compression_retriever.invoke(query_retrieve)
-    return compressed_docs
+    return compression_retriever
 
 
 # Rerank (FlashRank reranker)
-def flashrank_reranker(retriever: BaseRetriever):
+def flashrank_reranker(retriever: BaseRetriever, top_k: int =10):
     logging.info("Starting document reranking...")
 
     # 모델 초기화
@@ -75,9 +86,7 @@ def flashrank_reranker(retriever: BaseRetriever):
         base_compressor=compressor, base_retriever=retriever
     )
 
-    # 압축된 문서 검색
-    compressed_docs = compression_retriever.invoke(query_retrieve)
-    return compressed_docs
+    return compression_retriever
 
 
 if __name__ == "__main__":
@@ -93,10 +102,12 @@ if __name__ == "__main__":
     # ReRank
 
     # cross_encoders_reranker
-    cross_encoders_docs = cross_encoders_reranker(base_retriever, top_k=rerank_k)
+    cross_encoders_retriever = cross_encoders_reranker(base_retriever, top_k=rerank_k)
+    cross_encoders_docs = cross_encoders_retriever.invoke(query_retrieve)
+    
     # flashrank_reranker
-    flashrank_docs = flashrank_reranker(base_retriever)
-
+    flashrank_retriever = flashrank_reranker(base_retriever, top_k=rerank_k)
+    flashrank_docs = flashrank_retriever.invoke(query_retrieve)
 
     # 결과 비교
     # 기본 검색
