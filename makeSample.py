@@ -13,6 +13,7 @@
 import pandas as pd
 import os
 from tqdm import tqdm
+import json
 
 
 dir_path = r"C:\kha\project\rfp\data(sample)"
@@ -48,8 +49,9 @@ def merge_infos(bid_id:int):
     bidding_info_id, title = get_head_infos(bid_id)
 
     target_doc = df_list[1][df_list[1]['bidding_info_id'] == bidding_info_id]
-    summary, scope = target_doc[['summary', 'scope']].iloc[0]
-    df_basic_info = pd.DataFrame(columns=['title', 'summary', 'scope'], data=[[title, summary, scope]])
+    # $$$ background, impact 추가
+    summary, scope, background, impact = target_doc[['summary', 'scope', 'background', 'impact']].iloc[0]
+    df_basic_info = pd.DataFrame(columns=['title', 'summary', 'scope', 'background', 'impact'], data=[[title, summary, scope, background, impact]])
 
     df_rq_ref = get_requests(bidding_info_id)
 
@@ -66,9 +68,12 @@ def merge_2_json(bid_id):
     df_requests = pd.read_csv(os.path.join(inter_dir, f'{bid_id}_requests.csv'))
 
     # 3. basic_info 가공
+    # $$$ background, impact 추가
     basic_info = {"project_name": df_info.loc[0, "title"],
                   "summary": df_info.loc[0, "summary"],
-                  "scope": [line.strip(" *") for line in df_info.loc[0, "scope"].split("\n") if line.strip()]}
+                  "background": df_info.loc[0, "background"],
+                  "scope": [line.strip(" *") for line in df_info.loc[0, "scope"].split("\n") if line.strip()],
+                  "impact": df_info.loc[0, "impact"]}
 
     # 4. 요구사항 리스트 가공
     requirements = []
@@ -105,7 +110,9 @@ def refine_2_md(bid_id):
     basic_text = (
         f"[프로젝트명]\n{basic_info['project_name']}\n\n"
         f"[개요]\n{basic_info['summary']}\n\n"
-        f"[범위]\n" + "\n".join(f"- {item}" for item in basic_info["scope"])
+        f"[배경]\n{basic_info['background']}\n\n"
+        f"[범위]\n" + "\n".join(f"- {item}" for item in basic_info["scope"]) + "\n\n"
+        f"[기대효과]\n{basic_info['impact']}\n\n"
     )
 
     # 요구사항 포맷
@@ -131,6 +138,12 @@ def refine_2_md(bid_id):
 
 if __name__=='__main__':
     bid_ids = df_list[0].bid_no.to_list()
+
+    if not os.path.exists(inter_dir):
+        os.makedirs(inter_dir)
+
+    if not os.path.exists(save_dir):
+        os.makedirs(save_dir)
 
     test_num = 10
     # test_num = len(bid_ids)
