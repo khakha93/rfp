@@ -35,8 +35,6 @@ def connect_db():
     return conn, ssh_tunnel
 
 def close_db(conn, ssh_tunnel):
-    cur = conn.cursor()
-    cur.close()
     conn.close()
     ssh_tunnel.close()
 
@@ -47,6 +45,6 @@ if __name__ == "__main__":
     
     cur.execute("SELECT count(*) FROM public.bidding_information;")
     print(cur.fetchone())
-    
     conn.commit()
+
     close_db(conn, ssh_tunnel)
