@@ -1,66 +1,67 @@
-import os
-import pprint
-from langchain.prompts import PromptTemplate, FewShotPromptTemplate
-from langchain_openai import ChatOpenAI
+# RFP 데이터의 임베딩 생성 및 벡터 스토어 저장 스크립트
+#
+# 이 스크립트는 다음과 같은 기능을 수행합니다:
+# 1. TSV 파일에서 RFP 관련 데이터를 불러오기
+# 2. 텍스트 데이터를 임베딩 벡터로 변환
+# 3. Chroma 벡터 스토어에 데이터 저장
+# 4. 데이터를 벡터 공간에서 검색할 수 있도록 인덱싱
+#
+# 주요 의존성:
+# - LangChain
+# - Chroma
+# - HuggingFace Embeddings
+# - Transformers
+
+import pandas as pd
+from langchain_core.documents import Document
+from langchain_community.vectorstores import Chroma
+# from langchain_community.embeddings import HuggingFaceBgeEmbeddings
+from langchain_huggingface import HuggingFaceEmbeddings
+from langchain_text_splitters import RecursiveCharacterTextSplitter, TokenTextSplitter
+
+from transformers import AutoTokenizer
 
 
-def wrap_content(content: str) -> str:
-    return f"--- 제안요청서 시작 ---\n{content.strip()}\n--- 제안요청서 끝 ---"
+# 1. TSV 파일에서 bidding_name 컬럼만 불러오기
+df_left = pd.read_csv("data(sample)/1_infodb_bidding_information.tsv", sep="\t")
+df_right = pd.read_csv("data(sample)/1_infodb_abstract_information.tsv", sep="\t")
 
+df = pd.merge(left=df_left, right=df_right, how="inner", on="bidding_info_id").set_index("bidding_info_id")[["bidding_name", "summary"]].dropna()
+df['compact'] = df.apply(lambda x: f"제목: {x.bidding_name}\n내용: {x.summary}", axis=1)
 
-# 관련문서 가져오기 (md 파일)
-# $$$ 예시로 몇개 가져와서 테스트하기
-# $$$ md -> json으로 변경될 예정
-related_docs_dir = "C:/kha/project/rfp/data(sample)/recombined_docs"
-related_docs = [{"subject": f, "RFP": wrap_content(open(os.path.join(related_docs_dir, f), "r", encoding="utf-8").read())} for f in os.listdir(related_docs_dir) if f.endswith(".md")]
+docs = [Document(page_content=row.compact, metadata={"bidding_info_id": row.Index}) for row in df.itertuples()]
 
+tokenizer = AutoTokenizer.from_pretrained("jinaai/jina-embeddings-v3")
 
-# $$$ Rerank
+# 3. 텍스트 분할 (splitter는 core가 아닌 text_splitters에서 분리됨)
+text_splitter = RecursiveCharacterTextSplitter(chunk_size=1000, chunk_overlap=200)
+# text_splitter = TokenTextSplitter.from_huggingface_tokenizer(tokenizer, chunk_size=400, chunk_overlap=16)
+split_docs = text_splitter.split_documents(docs)
 
-# 사용자 입력 가져오기
-user_input_query = "2021년 기초학력 진단-보정 시스템 응용S/W 유지관리 및 서비스 운영"
-user_input_contents = """
-"""
-
-# 프롬프트 생성
-
-example_prompt = PromptTemplate(
-    input_variables=["subject", "RFP"],
-    template="q: '{subject}'의 제안요청서\na: {RFP}\n"
+# 4. jinaai 임베딩 모델 로딩
+embedding_model = HuggingFaceEmbeddings(
+    model_name="jinaai/jina-embeddings-v3",
+    model_kwargs={"trust_remote_code": True},
+    encode_kwargs={"normalize_embeddings": True}
 )
 
-# 최종 사용자 입력용 템플릿
-suffix_template = """q: '{subject}'의 제안요청서
-a:
-(단 아래 내용을 포함)
-{user_contents}
-"""
-
-# FewShotPromptTemplate을 생성합니다.
-prompt = FewShotPromptTemplate(
-    examples=related_docs,       # 사용할 예제들
-    example_prompt=example_prompt,  # 예제 포맷팅에 사용할 템플릿
-    prefix="다음은 제안요청서 예시입니다.\n",
-    suffix=suffix_template,
-    input_variables=["subject", "user_contents"],      # 입력 변수 지정
+# 5. Chroma에 저장
+persist_directory = "./chroma_db"
+vectorstore = Chroma.from_documents(
+    documents=split_docs,
+    embedding=embedding_model,
+    persist_directory=persist_directory
 )
 
-# 최종 프롬프트 생성
-final_prompt = prompt.format(subject=user_input_query, user_contents=user_input_contents)
-print(final_prompt)
+# 6. Retriever 생성
+retriever = vectorstore.as_retriever(search_kwargs={"k": 20})
+
+query = "기초학력 진단평가"
+results = retriever.invoke(query)
+
+for i, doc in enumerate(results):
+    print(i+1, doc.metadata)
+    print(doc.page_content)
+    print()
 
 
-# 답변 생성
-
-# LLM 생성
-llm = ChatOpenAI(model="gpt-4o-mini")
-
-# chain = LLMChain(llm=llm, prompt=prompt)
-chain = prompt | llm
-
-response = chain.invoke(user_input_query)
-
-# 결과 저장
-bid_name = re.sub("\W", "_", user_input_query)
-with open(f"fewshot/output/output_{bid_name}.md", "w", encoding="utf-8") as f:
-    f.write(response.content)

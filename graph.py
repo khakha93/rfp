@@ -64,15 +64,12 @@ workflow.add_conditional_edges(
 workflow.add_edge("modify_requests", "check_requests")
 
 # 질문 입력
-# inputs = {}
-# question = "내 이름은?"
-# inputs={"messages": [("user", question)]}
+# user_input_title = "서울시 업무메뉴얼 서비스"
+# user_input_contents = "생성형 ai(gpt 등)를 이용한 rag 기술을 적용하여 공공 업무의 효율성을 제고, 자동화, LLM"
+user_input_title = input("\n사업명을 입력하세요: ")
+user_input_contents = input("주요 내용: ")
 
-# $$$ 유저 인풋
-user_input_title = "기초학력진단평가"
-user_input_content = ""
-# 질문 입력 $$$ 클래스 변수 변경하기
-inputs = GraphState(title=user_input_title, contents=user_input_content)
+inputs = GraphState(title={user_input_title}, include_contents = user_input_contents)
 
 # 그래프 컴파일
 app = workflow.compile(checkpointer=memory)
@@ -82,6 +79,11 @@ visualize_graph(app)
 # 실행
 config = RunnableConfig(recursion_limit=50, configurable={"thread_id": random_uuid()})
 
-invoke_graph(app, inputs, config, ["retrieve_docs", "generate_basic", "prompt_rewrite"])
+# invoke_graph(app, inputs, config, ["retrieve_docs", "generate_basic", "prompt_rewrite"])
+stream_graph(app, inputs, config)
 
 
+
+
+# question = "내 이름은?"
+# inputs={"messages": [("user", question)]}
